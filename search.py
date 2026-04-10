@@ -1,80 +1,63 @@
-import requests
-from bs4 import BeautifulSoup
-from rich import print
-import argparse
+from duckduckgo_search import DDGS
 import json
+import argparse
 
 
-def duckduckgo_search(query):
-    url = "https://html.duckduckgo.com/html/"
-
-    data = {
-        "q": query
-    }
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    response = requests.post(url, data=data, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    results = []
-
-    for result in soup.find_all("div", class_="result"):
-        link_tag = result.find("a", href=True)
-        title_tag = result.find("a", class_="result__a")
-
-        if link_tag and title_tag:
-            href = link_tag["href"]
-            title = title_tag.get_text(strip=True)
-
-            # clean redirect links
-            if "uddg=" in href:
-                import urllib.parse
-                href = urllib.parse.parse_qs(
-                    urllib.parse.urlparse(href).query
-                ).get("uddg", [href])[0]
-
-            results.append({
-                "title": title,
-                "link": href
-            })
-
-    return results
-
-
-def run(phone):
+def search_phone(phone):
     queries = [
         f'"{phone}"',
         f'"{phone}" escort',
         f'"{phone}" site:loquosex.com',
-        f'"{phone}" site:escort',
         f'"{phone}" site:destacamos.com',
-        f'"{phone}" site:oasisdemadrid.com',
-        f'"{phone}" "independiente"',
-        f'"{phone}" site:nuevapasion.com',
-        f'"{phone}" site:spalumi.com',
-        f'"{phone}" site:choosescorts.com',
-        f'"{phone}" site:publicontactos.com'
+        f'"{phone}" site:publicontactos.com',
+        f'"{phone}" site:choosescorts.com'
     ]
 
     all_results = []
+    seen_links = set()
 
-    for q in queries:
-        print(f"\n[bold cyan]Searching:[/bold cyan] {q}")
-        results = duckduckgo_search(q)
+    print("\n[+] Starting OSINT search...\n")
 
-        for r in results:
-            print(f"[green]{r['title']}[/green]")
-            print(f"[blue]{r['link']}[/blue]\n")
+    with DDGS() as ddgs:
+        for query in queries:
+            print(f"[+] Searching: {query}")
 
-            all_results.append({
-                "query": q,
-                "title": r["title"],
-                "link": r["link"]
-            })
+            try:
+                results = ddgs.text(query, max_results=10)
+            except Exception as e:
+                print(f"[!] Error with query: {query} -> {e}")
+                continue
 
+            for r in results:
+                link = r.get("href")
+                title = r.get("title")
+
+                if not link or not title:
+                    continue
+
+                # remove duplicates
+                if link in seen_links:
+                    print("[!] Duplicate skipped")
+                    continue
+
+                seen_links.add(link)
+
+                # filter out typical noise (ads/spam)
+                if "duckduckgo.com" in link:
+                    continue
+
+                print(f"[+] Added: {title}")
+                print(link, "\n")
+
+                all_results.append({
+                    "query": query,
+                    "title": title,
+                    "link": link
+                })
+
+    print(f"\n[+] Total results collected: {len(all_results)}")
+
+    # save results
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
@@ -88,6 +71,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.phone:
-        run(args.phone)
+        search_phone(args.phone)
     else:
-        print("[red]Introduce a phone number with --phone[/red]")
+        print("[-] Introduce a phone number with --phone")
