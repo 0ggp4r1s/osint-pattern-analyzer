@@ -1,4 +1,4 @@
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import json
 import argparse
 
@@ -25,7 +25,7 @@ def search_phone(phone):
             try:
                 results = ddgs.text(query, max_results=10)
             except Exception as e:
-                print(f"[!] Error with query: {query} -> {e}")
+                print(f"[!] Error: {e}")
                 continue
 
             for r in results:
@@ -35,18 +35,17 @@ def search_phone(phone):
                 if not link or not title:
                     continue
 
-                # remove duplicates
+                # delete duplicates
                 if link in seen_links:
-                    print("[!] Duplicate skipped")
                     continue
 
                 seen_links.add(link)
 
-                # filter out typical noise (ads/spam)
+                # prevent waste
                 if "duckduckgo.com" in link:
                     continue
 
-                print(f"[+] Added: {title}")
+                print(f"[+] {title}")
                 print(link, "\n")
 
                 all_results.append({
@@ -57,7 +56,6 @@ def search_phone(phone):
 
     print(f"\n[+] Total results collected: {len(all_results)}")
 
-    # save results
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
