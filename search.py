@@ -29,19 +29,15 @@ DUO_KEYWORDS = ["duo", "dos", "pareja"]
 
 
 def is_valid_domain(link):
-    """Check if link belongs to known relevant domains"""
     return any(domain in link for domain in VALID_DOMAINS)
 
 
 def is_ad_link(link):
-    """Detect if link looks like a real ad (avoid generic pages)"""
     link = link.lower()
 
-    # clear signals of real ad pages
     if any(x in link for x in ["details", ".html", "contactos"]):
         return True
 
-    # avoid generic/category pages
     if any(x in link for x in [
         "categoria",
         "tag",
@@ -50,17 +46,14 @@ def is_ad_link(link):
     ]):
         return False
 
-    # fallback → allow but will be scored later
     return True
 
 
 def detect_type(title):
-    """Detect if ad is individual / group / duo"""
     t = title.lower()
 
     if any(word in t for word in GROUP_KEYWORDS):
         return "group"
-
     if any(word in t for word in DUO_KEYWORDS):
         return "duo"
 
@@ -68,7 +61,6 @@ def detect_type(title):
 
 
 def generate_phone_variants(phone):
-    """Generate multiple formats of the phone number"""
     phone = phone.replace(" ", "")
 
     return list(set([
@@ -80,7 +72,6 @@ def generate_phone_variants(phone):
 
 
 def contains_phone(title, link, variants):
-    """Check if phone appears (NOT used as filter anymore)"""
     text = f"{title} {link}".replace(" ", "")
 
     for v in variants:
@@ -91,7 +82,6 @@ def contains_phone(title, link, variants):
 
 
 def score_result(title, link):
-    """Score results to prioritize (NOT filter)"""
     score = 0
     title_lower = title.lower()
 
@@ -107,6 +97,15 @@ def score_result(title, link):
     return score
 
 
+def classify_confidence(phone_match, score):
+    if phone_match and score >= 3:
+        return "high"
+    elif score >= 2:
+        return "medium"
+    else:
+        return "low"
+
+
 def search_phone(phone):
 
     variants = generate_phone_variants(phone)
@@ -116,7 +115,6 @@ def search_phone(phone):
         queries.append(f'"{v}"')
         queries.append(f'"{v}" escort')
 
-    # domain-specific queries
     queries += [
         f'"{phone}" site:loquosex.com',
         f'"{phone}" site:destacamos.com',
@@ -124,7 +122,6 @@ def search_phone(phone):
         f'"{phone}" site:choosescorts.com'
     ]
 
-    # remove duplicates
     queries = list(set(queries))
 
     all_results = []
@@ -152,19 +149,15 @@ def search_phone(phone):
                 if not link or not title:
                     continue
 
-                # avoid duplicates
                 if link in seen_links:
                     continue
 
-                # skip DDG internal links
                 if "duckduckgo.com" in link:
                     continue
 
-                # domain filter
                 if not is_valid_domain(link):
                     continue
 
-                # avoid generic pages
                 if not is_ad_link(link):
                     continue
 
@@ -173,9 +166,8 @@ def search_phone(phone):
                 domain = link.split("/")[2]
                 ad_type = detect_type(title)
                 score = score_result(title, link)
-
-                # just informative
                 phone_match = contains_phone(title, link, variants)
+                confidence = classify_confidence(phone_match, score)
 
                 print(f"[+] {title}")
                 print(link, "\n")
@@ -187,26 +179,29 @@ def search_phone(phone):
                     "domain": domain,
                     "type": ad_type,
                     "score": score,
-                    "phone_match": phone_match
+                    "phone_match": phone_match,
+                    "confidence": confidence
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
 
-    # sort by score (higher first)
     all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-    # save results
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
-    # summary
     print("\n[+] Summary:\n")
 
     types = set(r["type"] for r in all_results)
     matches = sum(1 for r in all_results if r["phone_match"])
 
+    high = sum(1 for r in all_results if r["confidence"] == "high")
+    medium = sum(1 for r in all_results if r["confidence"] == "medium")
+    low = sum(1 for r in all_results if r["confidence"] == "low")
+
     print(f"[+] Ad types detected: {list(types)}")
     print(f"[+] Confirmed phone matches: {matches}/{len(all_results)}")
+    print(f"[+] Confidence distribution -> high: {high}, medium: {medium}, low: {low}")
 
     return all_results
 
