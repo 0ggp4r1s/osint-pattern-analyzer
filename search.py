@@ -3,6 +3,35 @@ import json
 import argparse
 
 
+# dominios relevantes (OSINT real)
+VALID_DOMAINS = [
+    "loquosex.com",
+    "destacamos.com",
+    "publicontactos.com",
+    "choosescorts.com",
+    "nuevapasion.com",
+    "slumi.com"
+]
+
+# palabras clave para filtrar resultados útiles
+KEYWORDS = [
+    "escort",
+    "puta",
+    "masajes",
+    "contactos",
+    "vip",
+    "independiente"
+]
+
+
+def is_valid_result(link):
+    return any(domain in link for domain in VALID_DOMAINS)
+
+
+def is_relevant(title):
+    return any(word in title.lower() for word in KEYWORDS)
+
+
 def search_phone(phone):
     queries = [
         f'"{phone}"',
@@ -23,7 +52,7 @@ def search_phone(phone):
             print(f"[+] Searching: {query}")
 
             try:
-                results = ddgs.text(query, max_results=10)
+                results = ddgs.text(query, max_results=15)
             except Exception as e:
                 print(f"[!] Error: {e}")
                 continue
@@ -35,15 +64,25 @@ def search_phone(phone):
                 if not link or not title:
                     continue
 
-                # delete duplicates
+                # evitar duplicados
                 if link in seen_links:
+                    continue
+
+                # evitar links basura
+                if "duckduckgo.com" in link:
+                    continue
+
+                # filtro por dominio
+                if not is_valid_result(link):
+                    continue
+
+                # filtro por contenido
+                if not is_relevant(title):
                     continue
 
                 seen_links.add(link)
 
-                # prevent waste
-                if "duckduckgo.com" in link:
-                    continue
+                domain = link.split("/")[2]
 
                 print(f"[+] {title}")
                 print(link, "\n")
@@ -51,11 +90,13 @@ def search_phone(phone):
                 all_results.append({
                     "query": query,
                     "title": title,
-                    "link": link
+                    "link": link,
+                    "domain": domain
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
 
+    # save results
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
