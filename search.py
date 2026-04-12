@@ -13,7 +13,7 @@ VALID_DOMAINS = [
     "slumi.com"
 ]
 
-# useful keywords 
+# useful keywords
 KEYWORDS = [
     "escort",
     "puta",
@@ -34,10 +34,10 @@ def is_valid_domain(link):
 
 
 def is_ad_link(link):
-    """Try to detect if link is a real ad and not a generic listing"""
+    """Detect if link looks like a real ad (avoid generic pages)"""
     link = link.lower()
 
-    # clear indicators of real ad pages
+    # clear signals of real ad pages
     if any(x in link for x in ["details", ".html", "contactos"]):
         return True
 
@@ -50,12 +50,12 @@ def is_ad_link(link):
     ]):
         return False
 
-    # fallback
+    # fallback → allow but will be scored later
     return True
 
 
 def detect_type(title):
-    """Detect if the ad is individual, group or duo"""
+    """Detect if ad is individual / group / duo"""
     t = title.lower()
 
     if any(word in t for word in GROUP_KEYWORDS):
@@ -68,7 +68,7 @@ def detect_type(title):
 
 
 def generate_phone_variants(phone):
-    """Generate different formats of the phone number"""
+    """Generate multiple formats of the phone number"""
     phone = phone.replace(" ", "")
 
     return list(set([
@@ -80,7 +80,7 @@ def generate_phone_variants(phone):
 
 
 def contains_phone(title, link, variants):
-    """Ensure the result actually contains the phone number"""
+    """Check if phone appears (NOT used as filter anymore)"""
     text = f"{title} {link}".replace(" ", "")
 
     for v in variants:
@@ -91,7 +91,7 @@ def contains_phone(title, link, variants):
 
 
 def score_result(title, link):
-    """Score results to prioritize better matches (not filtering)"""
+    """Score results to prioritize (NOT filter)"""
     score = 0
     title_lower = title.lower()
 
@@ -124,6 +124,9 @@ def search_phone(phone):
         f'"{phone}" site:choosescorts.com'
     ]
 
+    # remove duplicates
+    queries = list(set(queries))
+
     all_results = []
     seen_links = set()
 
@@ -139,7 +142,7 @@ def search_phone(phone):
                 if "No results found" in str(e):
                     print(f"[!] No results for query: {query}")
                 else:
-                    print(f"[!] Query error: {query}")
+                    print(f"[!] Error in query '{query}': {e}")
                 continue
 
             for r in results:
@@ -165,15 +168,14 @@ def search_phone(phone):
                 if not is_ad_link(link):
                     continue
 
-                # ensure phone is really present
-                if not contains_phone(title, link, variants):
-                    continue
-
                 seen_links.add(link)
 
                 domain = link.split("/")[2]
                 ad_type = detect_type(title)
                 score = score_result(title, link)
+
+                # just informative
+                phone_match = contains_phone(title, link, variants)
 
                 print(f"[+] {title}")
                 print(link, "\n")
@@ -184,7 +186,8 @@ def search_phone(phone):
                     "link": link,
                     "domain": domain,
                     "type": ad_type,
-                    "score": score
+                    "score": score,
+                    "phone_match": phone_match
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
@@ -200,8 +203,10 @@ def search_phone(phone):
     print("\n[+] Summary:\n")
 
     types = set(r["type"] for r in all_results)
+    matches = sum(1 for r in all_results if r["phone_match"])
 
     print(f"[+] Ad types detected: {list(types)}")
+    print(f"[+] Confirmed phone matches: {matches}/{len(all_results)}")
 
     return all_results
 
