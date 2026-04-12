@@ -1,7 +1,6 @@
 from ddgs import DDGS
 import json
 import argparse
-import re
 
 
 # relevant domains
@@ -14,7 +13,7 @@ VALID_DOMAINS = [
     "slumi.com"
 ]
 
-# keywords to filter useful results
+# useful keywords
 KEYWORDS = [
     "escort",
     "puta",
@@ -24,54 +23,31 @@ KEYWORDS = [
     "independiente"
 ]
 
-# words indicating “group”
-GROUP_KEYWORDS = [
-    "amigas",
-    "chicas",
-    "grupo",
-    "varias"
-]
-
-# words indicating “duo”
-DUO_KEYWORDS = [
-    "duo",
-    "dos",
-    "pareja"
-]
+# group / duo detection
+GROUP_KEYWORDS = ["amigas", "chicas", "grupo", "varias"]
+DUO_KEYWORDS = ["duo", "dos", "pareja"]
 
 
-def is_valid_result(link):
+def is_valid_domain(link):
     return any(domain in link for domain in VALID_DOMAINS)
 
 
-def is_relevant(title):
-    return any(word in title.lower() for word in KEYWORDS)
+def is_ad_link(link):
+    link = link.lower()
 
-
-# skip generic pages
-def is_specific_ad(link):
-    return any(x in link for x in [
+    # typical signs of a genuine ad
+    signals = [
+        "escort",
+        "contactos",
+        "anuncio",
         "details",
-        ".html",
-        "contactos"
-    ])
-
-
-# generate phone variants
-def generate_phone_variants(phone):
-    phone = phone.replace(" ", "")
-
-    variants = [
-        phone,
-        f"+34{phone}",
-        f"0034{phone}",
-        f"{phone[:3]} {phone[3:5]} {phone[5:7]} {phone[7:]}"
+        "telefono",
+        ".html"
     ]
 
-    return list(set(variants))
+    return any(s in link for s in signals)
 
 
-# detect ad type
 def detect_type(title):
     t = title.lower()
 
@@ -84,43 +60,30 @@ def detect_type(title):
     return "individual"
 
 
-# retrieve clean name
-def extract_name(title, phone):
+# generate variations of the number
+def generate_phone_variants(phone):
+    phone = phone.replace(" ", "")
 
-    clean_title = title.replace(phone, "")
-    clean_title = re.sub(r'\+34|0034', '', clean_title)
-    clean_title = re.sub(r'\d+', '', clean_title)
-
-    words = clean_title.split()
-
-    for w in words:
-        w_clean = w.lower()
-
-        # avoid junk words
-        if w_clean in KEYWORDS:
-            continue
-        if w_clean in GROUP_KEYWORDS:
-            continue
-        if w_clean in DUO_KEYWORDS:
-            continue
-
-        if len(w_clean) > 2:
-            return w.capitalize()
-
-    return None
+    return list(set([
+        phone,
+        f"+34{phone}",
+        f"0034{phone}",
+        f"{phone[:3]} {phone[3:5]} {phone[5:7]} {phone[7:]}"
+    ]))
 
 
-# scoring
+# fine scoring 
 def score_result(title, link):
     score = 0
+    title_lower = title.lower()
 
-    if any(word in title.lower() for word in KEYWORDS):
-        score += 2
-
-    if any(domain in link for domain in VALID_DOMAINS):
+    if any(word in title_lower for word in KEYWORDS):
         score += 2
 
     if "details" in link:
+        score += 2
+
+    if "contactos" in link:
         score += 1
 
     return score
@@ -152,12 +115,12 @@ def search_phone(phone):
             print(f"[+] Searching: {query}")
 
             try:
-                results = ddgs.text(query, max_results=15)
+                results = ddgs.text(query, max_results=20)
             except Exception as e:
                 if "No results found" in str(e):
                     print(f"[!] No results for query: {query}")
                 else:
-                    print(f"[!] Unexpected error in query '{query}': {e}")
+                    print(f"[!] Query error: {query}")
                 continue
 
             for r in results:
@@ -173,19 +136,15 @@ def search_phone(phone):
                 if "duckduckgo.com" in link:
                     continue
 
-                if not is_valid_result(link):
+                if not is_valid_domain(link):
                     continue
 
-                if not is_relevant(title):
-                    continue
-
-                if not is_specific_ad(link):
+                if not is_ad_link(link):
                     continue
 
                 seen_links.add(link)
 
                 domain = link.split("/")[2]
-                name = extract_name(title, phone)
                 ad_type = detect_type(title)
                 score = score_result(title, link)
 
@@ -197,32 +156,23 @@ def search_phone(phone):
                     "title": title,
                     "link": link,
                     "domain": domain,
-                    "name": name,
                     "type": ad_type,
                     "score": score
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
 
-    # sort by score
+    # sort without deleting anything
     all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-    # save json
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
-    # summary
+    # summary 
     print("\n[+] Summary:\n")
 
-    names = set()
-    types = set()
+    types = set(r["type"] for r in all_results)
 
-    for r in all_results:
-        if r["name"]:
-            names.add(r["name"])
-        types.add(r["type"])
-
-    print(f"[+] Names detected: {list(names)}")
     print(f"[+] Ad types detected: {list(types)}")
 
     return all_results
