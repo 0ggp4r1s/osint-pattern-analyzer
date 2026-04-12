@@ -4,7 +4,7 @@ import argparse
 import re
 
 
-# relevant domains 
+# relevant domains
 VALID_DOMAINS = [
     "loquosex.com",
     "destacamos.com",
@@ -24,6 +24,21 @@ KEYWORDS = [
     "independiente"
 ]
 
+# words indicating “group”
+GROUP_KEYWORDS = [
+    "amigas",
+    "chicas",
+    "grupo",
+    "varias"
+]
+
+# words indicating “duo”
+DUO_KEYWORDS = [
+    "duo",
+    "dos",
+    "pareja"
+]
+
 
 def is_valid_result(link):
     return any(domain in link for domain in VALID_DOMAINS)
@@ -37,11 +52,12 @@ def is_relevant(title):
 def is_specific_ad(link):
     return any(x in link for x in [
         "details",
-        ".html"
+        ".html",
+        "contactos"
     ])
 
 
-# generate phone variants 
+# generate phone variants
 def generate_phone_variants(phone):
     phone = phone.replace(" ", "")
 
@@ -55,15 +71,46 @@ def generate_phone_variants(phone):
     return list(set(variants))
 
 
-# extract name
-def extract_name(title):
-    words = title.split()
-    if len(words) > 0:
-        return words[0]
+# detect ad type
+def detect_type(title):
+    t = title.lower()
+
+    if any(word in t for word in GROUP_KEYWORDS):
+        return "group"
+
+    if any(word in t for word in DUO_KEYWORDS):
+        return "duo"
+
+    return "individual"
+
+
+# retrieve clean name
+def extract_name(title, phone):
+
+    clean_title = title.replace(phone, "")
+    clean_title = re.sub(r'\+34|0034', '', clean_title)
+    clean_title = re.sub(r'\d+', '', clean_title)
+
+    words = clean_title.split()
+
+    for w in words:
+        w_clean = w.lower()
+
+        # avoid junk words
+        if w_clean in KEYWORDS:
+            continue
+        if w_clean in GROUP_KEYWORDS:
+            continue
+        if w_clean in DUO_KEYWORDS:
+            continue
+
+        if len(w_clean) > 2:
+            return w.capitalize()
+
     return None
 
 
-# a quick scorecard to prioritize results
+# scoring
 def score_result(title, link):
     score = 0
 
@@ -88,7 +135,6 @@ def search_phone(phone):
         queries.append(f'"{v}"')
         queries.append(f'"{v}" escort')
 
-    # domain-specific queries 
     queries += [
         f'"{phone}" site:loquosex.com',
         f'"{phone}" site:destacamos.com',
@@ -121,30 +167,26 @@ def search_phone(phone):
                 if not link or not title:
                     continue
 
-                # skip duplicates
                 if link in seen_links:
                     continue
 
-                # avoid junk links
                 if "duckduckgo.com" in link:
                     continue
 
-                # filter by domain
                 if not is_valid_result(link):
                     continue
 
-                # filter by content
                 if not is_relevant(title):
                     continue
 
-                # skip categories/lists
                 if not is_specific_ad(link):
                     continue
 
                 seen_links.add(link)
 
                 domain = link.split("/")[2]
-                name = extract_name(title)
+                name = extract_name(title, phone)
+                ad_type = detect_type(title)
                 score = score_result(title, link)
 
                 print(f"[+] {title}")
@@ -156,17 +198,32 @@ def search_phone(phone):
                     "link": link,
                     "domain": domain,
                     "name": name,
+                    "type": ad_type,
                     "score": score
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
 
-    # sort by score (highest first)
+    # sort by score
     all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-    # save results
+    # save json
     with open(f"results_{phone}.json", "w") as f:
         json.dump(all_results, f, indent=4)
+
+    # summary
+    print("\n[+] Summary:\n")
+
+    names = set()
+    types = set()
+
+    for r in all_results:
+        if r["name"]:
+            names.add(r["name"])
+        types.add(r["type"])
+
+    print(f"[+] Names detected: {list(names)}")
+    print(f"[+] Ad types detected: {list(types)}")
 
     return all_results
 
