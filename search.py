@@ -1,9 +1,10 @@
 from ddgs import DDGS
 import json
 import argparse
+import re
 
 
-# relevant domains
+# relevant domains 
 VALID_DOMAINS = [
     "loquosex.com",
     "destacamos.com",
@@ -40,10 +41,55 @@ def is_specific_ad(link):
     ])
 
 
+# generate phone variants 
+def generate_phone_variants(phone):
+    phone = phone.replace(" ", "")
+
+    variants = [
+        phone,
+        f"+34{phone}",
+        f"0034{phone}",
+        f"{phone[:3]} {phone[3:5]} {phone[5:7]} {phone[7:]}"
+    ]
+
+    return list(set(variants))
+
+
+# extract name
+def extract_name(title):
+    words = title.split()
+    if len(words) > 0:
+        return words[0]
+    return None
+
+
+# a quick scorecard to prioritize results
+def score_result(title, link):
+    score = 0
+
+    if any(word in title.lower() for word in KEYWORDS):
+        score += 2
+
+    if any(domain in link for domain in VALID_DOMAINS):
+        score += 2
+
+    if "details" in link:
+        score += 1
+
+    return score
+
+
 def search_phone(phone):
-    queries = [
-        f'"{phone}"',
-        f'"{phone}" escort',
+
+    variants = generate_phone_variants(phone)
+
+    queries = []
+    for v in variants:
+        queries.append(f'"{v}"')
+        queries.append(f'"{v}" escort')
+
+    # domain-specific queries 
+    queries += [
         f'"{phone}" site:loquosex.com',
         f'"{phone}" site:destacamos.com',
         f'"{phone}" site:publicontactos.com',
@@ -83,7 +129,7 @@ def search_phone(phone):
                 if "duckduckgo.com" in link:
                     continue
 
-                # filter by content
+                # filter by domain
                 if not is_valid_result(link):
                     continue
 
@@ -98,6 +144,8 @@ def search_phone(phone):
                 seen_links.add(link)
 
                 domain = link.split("/")[2]
+                name = extract_name(title)
+                score = score_result(title, link)
 
                 print(f"[+] {title}")
                 print(link, "\n")
@@ -106,10 +154,15 @@ def search_phone(phone):
                     "query": query,
                     "title": title,
                     "link": link,
-                    "domain": domain
+                    "domain": domain,
+                    "name": name,
+                    "score": score
                 })
 
     print(f"\n[+] Total results collected: {len(all_results)}")
+
+    # sort by score (highest first)
+    all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
     # save results
     with open(f"results_{phone}.json", "w") as f:
