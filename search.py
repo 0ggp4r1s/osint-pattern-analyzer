@@ -3,7 +3,7 @@ import json
 import argparse
 
 
-# dominios relevantes (OSINT real)
+# relevant domains
 VALID_DOMAINS = [
     "loquosex.com",
     "destacamos.com",
@@ -13,7 +13,7 @@ VALID_DOMAINS = [
     "slumi.com"
 ]
 
-# palabras clave para filtrar resultados útiles
+# keywords to filter useful results
 KEYWORDS = [
     "escort",
     "puta",
@@ -30,6 +30,14 @@ def is_valid_result(link):
 
 def is_relevant(title):
     return any(word in title.lower() for word in KEYWORDS)
+
+
+# skip generic pages
+def is_specific_ad(link):
+    return any(x in link for x in [
+        "details",
+        ".html"
+    ])
 
 
 def search_phone(phone):
@@ -54,7 +62,10 @@ def search_phone(phone):
             try:
                 results = ddgs.text(query, max_results=15)
             except Exception as e:
-                print(f"[!] Error: {e}")
+                if "No results found" in str(e):
+                    print(f"[!] No results for query: {query}")
+                else:
+                    print(f"[!] Unexpected error in query '{query}': {e}")
                 continue
 
             for r in results:
@@ -64,20 +75,24 @@ def search_phone(phone):
                 if not link or not title:
                     continue
 
-                # evitar duplicados
+                # skip duplicates
                 if link in seen_links:
                     continue
 
-                # evitar links basura
+                # avoid junk links
                 if "duckduckgo.com" in link:
                     continue
 
-                # filtro por dominio
+                # filter by content
                 if not is_valid_result(link):
                     continue
 
-                # filtro por contenido
+                # filter by content
                 if not is_relevant(title):
+                    continue
+
+                # skip categories/lists
+                if not is_specific_ad(link):
                     continue
 
                 seen_links.add(link)
