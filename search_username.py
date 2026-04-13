@@ -58,6 +58,10 @@ def detect_platform(link, title):
 def is_noise(link):
     link = link.lower()
 
+    # allow facebook always
+    if "facebook.com" in link:
+        return False
+
     noise_patterns = [
         "categoria", "tag", "listado",
         "page=", "buscar", "search",
@@ -83,19 +87,49 @@ def is_probably_profile(link):
     return any(p in link for p in good_patterns)
 
 
+def score_result(title, link):
+    score = 0
+    t = title.lower()
+
+    if "masajes" in t:
+        score += 2
+
+    if "escort" in t or "contactos" in t:
+        score += 2
+
+    if "facebook.com" in link:
+        score += 2
+
+    if "t.me" in link:
+        score += 3
+
+    if ".html" in link:
+        score += 1
+
+    return score
+
+
 def search_username(username):
 
     queries = [
         f'"{username}"',
         f'"{username}" telegram',
         f'"{username}" site:t.me',
+
         f'"{username}" instagram',
         f'"{username}" twitter',
+
+        # facebook queries
         f'"{username}" facebook',
+        f'"{username}" site:facebook.com',
+        f'"{username}" site:m.facebook.com',
+
         f'"{username}" onlyfans',
         f'"{username}" escort',
         f'"{username}" contactos',
+        f'"{username}" masajes',
 
+        # escort-focused
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
         f'"{username}" site:skokka.com',
@@ -134,14 +168,13 @@ def search_username(username):
                 if "duckduckgo.com" in link:
                     continue
 
-                # remove obvious noise
+                # remove noise
                 if is_noise(link):
                     continue
 
                 detected = detect_platform(link, title)
 
-                # soft filter:
-                # keep if platform detected OR looks like real profile
+                # keep if useful signal
                 if not detected and not is_probably_profile(link):
                     continue
 
@@ -150,6 +183,8 @@ def search_username(username):
                 for d in detected:
                     platform_hits[d] = True
 
+                score = score_result(title, link)
+
                 print(f"[+] {title}")
                 print(link, "\n")
 
@@ -157,7 +192,8 @@ def search_username(username):
                     "query": query,
                     "title": title,
                     "link": link,
-                    "categories": list(detected)
+                    "categories": list(detected),
+                    "score": score
                 })
 
     print("\n[+] Summary:\n")
@@ -165,6 +201,9 @@ def search_username(username):
     for p, v in platform_hits.items():
         status = "✔" if v else "✘"
         print(f"{p}: {status}")
+
+    # sort results 
+    all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
     output = {
         "username": username,
