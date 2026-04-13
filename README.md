@@ -23,7 +23,7 @@ Tool for automating phone number OSINT investigations and preparing structured d
 ## Usage
 
 ```bash
-python search.py --phone 660XXXXXXX
+python search_phone.py --phone 660XXXXXXX
 ```
 
 ## Example Output
