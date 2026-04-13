@@ -58,7 +58,6 @@ def detect_platform(link, title):
 def is_noise(link):
     link = link.lower()
 
-    # allow facebook always
     if "facebook.com" in link:
         return False
 
@@ -97,7 +96,10 @@ def score_result(title, link):
     if "escort" in t or "contactos" in t:
         score += 2
 
-    if "facebook.com" in link:
+    if "facebook" in t or "facebook.com" in link:
+        score += 2
+
+    if "twitter" in t or "x.com" in link:
         score += 2
 
     if "t.me" in link:
@@ -113,23 +115,28 @@ def search_username(username):
 
     queries = [
         f'"{username}"',
+
         f'"{username}" telegram',
         f'"{username}" site:t.me',
 
         f'"{username}" instagram',
-        f'"{username}" twitter',
 
-        # facebook queries
+        # twitter / x improved
+        f'"{username}" twitter',
+        f'"{username}" x.com',
+        f'"{username}" site:twitter.com',
+        f'"{username}" site:x.com',
+
+        # facebook improved
         f'"{username}" facebook',
-        f'"{username}" site:facebook.com',
-        f'"{username}" site:m.facebook.com',
+        f'"{username}" "facebook"',
+        f'"{username}" "fb"',
 
         f'"{username}" onlyfans',
         f'"{username}" escort',
         f'"{username}" contactos',
         f'"{username}" masajes',
 
-        # escort-focused
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
         f'"{username}" site:skokka.com',
@@ -168,13 +175,11 @@ def search_username(username):
                 if "duckduckgo.com" in link:
                     continue
 
-                # remove noise
                 if is_noise(link):
                     continue
 
                 detected = detect_platform(link, title)
 
-                # keep if useful signal
                 if not detected and not is_probably_profile(link):
                     continue
 
@@ -202,7 +207,6 @@ def search_username(username):
         status = "✔" if v else "✘"
         print(f"{p}: {status}")
 
-    # sort results 
     all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
     output = {
