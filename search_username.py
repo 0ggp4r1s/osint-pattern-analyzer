@@ -3,7 +3,6 @@ import json
 import argparse
 
 
-# platform classification
 PLATFORMS = {
     "telegram": ["t.me", "telegram"],
 
@@ -36,6 +35,10 @@ PLATFORMS = {
         "oklute.com", "mundosexanuncio.com", "milescorts.com",
         "eurogirlsescort.com", "sexjobs.es", "publihot.com",
         "pasion.com", "putas69", "happyescorts"
+    ],
+
+    "forums": [
+        "forocoches", "spalumi", "reddit"
     ]
 }
 
@@ -52,16 +55,32 @@ def detect_platform(link, title):
     return detected
 
 
-def is_relevant_result(link, title):
-    text = (link + " " + title).lower()
+def is_noise(link):
+    link = link.lower()
 
-    # avoid generic pages
-    if any(x in text for x in [
-        "categoria", "tag", "listado", "page=", "search"
-    ]):
-        return False
+    noise_patterns = [
+        "categoria", "tag", "listado",
+        "page=", "buscar", "search",
+        "/escorts/", "/category/", "/tags/",
+        "/page/", "?p="
+    ]
 
-    return True
+    return any(n in link for n in noise_patterns)
+
+
+def is_probably_profile(link):
+    link = link.lower()
+
+    good_patterns = [
+        ".html",
+        "details",
+        "contactos",
+        "escort-",
+        "/perfil/",
+        "/user/"
+    ]
+
+    return any(p in link for p in good_patterns)
 
 
 def search_username(username):
@@ -72,11 +91,11 @@ def search_username(username):
         f'"{username}" site:t.me',
         f'"{username}" instagram',
         f'"{username}" twitter',
+        f'"{username}" facebook',
         f'"{username}" onlyfans',
         f'"{username}" escort',
         f'"{username}" contactos',
 
-        # escort-focused
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
         f'"{username}" site:skokka.com',
@@ -88,7 +107,6 @@ def search_username(username):
     seen_links = set()
     all_results = []
 
-    # detection flags
     platform_hits = {k: False for k in PLATFORMS.keys()}
 
     print("\n[+] Starting username OSINT search...\n")
@@ -116,13 +134,15 @@ def search_username(username):
                 if "duckduckgo.com" in link:
                     continue
 
-                if not is_relevant_result(link, title):
+                # remove obvious noise
+                if is_noise(link):
                     continue
 
                 detected = detect_platform(link, title)
 
-                # skip useless results (no platform detected)
-                if not detected:
+                # soft filter:
+                # keep if platform detected OR looks like real profile
+                if not detected and not is_probably_profile(link):
                     continue
 
                 seen_links.add(link)
