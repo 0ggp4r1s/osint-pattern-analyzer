@@ -67,7 +67,6 @@ def detect_platform(link, title):
 def is_noise(link):
     link = link.lower()
 
-    # allow facebook
     if "facebook.com" in link:
         return False
 
@@ -81,26 +80,8 @@ def is_noise(link):
     return any(n in link for n in noise_patterns)
 
 
-def is_probably_profile(link):
-    link = link.lower()
-
-    good_patterns = [
-        ".html",
-        "details",
-        "contactos",
-        "escort-",
-        "/perfil/",
-        "/user/"
-    ]
-
-    return any(p in link for p in good_patterns)
-
-
 def is_exact_username_match(link, username):
-    link = link.lower()
-    username = username.lower()
-
-    return f"/{username}" in link
+    return f"/{username.lower()}" in link.lower()
 
 
 def score_result(title, link):
@@ -128,9 +109,6 @@ def score_result(title, link):
     return score
 
 
-# -------------------------
-# GOOGLE fallback
-# -------------------------
 def google_search(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     url = f"https://www.google.com/search?q={query}"
@@ -160,35 +138,27 @@ def google_search(query):
 
 def search_username(username):
 
-    queries = [
+    queries = list(set([
         f'"{username}"',
-
         f'"{username}" telegram',
         f'"{username}" site:t.me',
-
         f'"{username}" instagram',
-
         f'"{username}" twitter',
         f'"{username}" x.com',
         f'"{username}" site:twitter.com',
         f'"{username}" site:x.com',
-
         f'"{username}" facebook',
         f'"{username}" site:facebook.com',
         f'"{username}" site:m.facebook.com',
-
         f'"{username}" onlyfans',
         f'"{username}" escort',
         f'"{username}" contactos',
         f'"{username}" masajes',
-
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
         f'"{username}" site:skokka.com',
         f'"{username}" site:loquosex.com'
-    ]
-
-    queries = list(set(queries))
+    ]))
 
     seen_links = set()
     all_results = []
@@ -230,11 +200,28 @@ def search_username(username):
                 detected = detect_platform(link, title)
                 exact_match = is_exact_username_match(link, username)
 
-                # main filter
-                if not exact_match and not (detected and is_probably_profile(link)):
+                text = (link + title).lower()
+
+                # --- NEW LOGIC ---
+
+                if exact_match:
+                    pass
+
+                elif "social" in detected:
+                    if username.lower() not in text:
+                        continue
+
+                elif "escort_sites" in detected:
+                    if username.lower() not in text:
+                        continue
+
+                elif "forums" in detected:
+                    pass
+
+                else:
                     continue
 
-                # extra strict filter for X / Twitter
+                # twitter strict
                 if "x.com" in link or "twitter.com" in link:
                     if not exact_match:
                         continue
