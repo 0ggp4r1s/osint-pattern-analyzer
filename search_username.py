@@ -96,6 +96,13 @@ def is_probably_profile(link):
     return any(p in link for p in good_patterns)
 
 
+def is_exact_username_match(link, username):
+    link = link.lower()
+    username = username.lower()
+
+    return f"/{username}" in link
+
+
 def score_result(title, link):
     score = 0
     t = title.lower()
@@ -107,7 +114,7 @@ def score_result(title, link):
         score += 2
 
     if "facebook" in t or "facebook.com" in link:
-        score += 3 
+        score += 3
 
     if "twitter" in t or "x.com" in link:
         score += 2
@@ -166,7 +173,6 @@ def search_username(username):
         f'"{username}" site:twitter.com',
         f'"{username}" site:x.com',
 
-        # enhance facebook 
         f'"{username}" facebook',
         f'"{username}" site:facebook.com',
         f'"{username}" site:m.facebook.com',
@@ -201,7 +207,6 @@ def search_username(username):
             except:
                 results = []
 
-            # fallback to google
             if not results:
                 print(f"[!] Google fallback: {query}")
                 results = google_search(query)
@@ -223,9 +228,16 @@ def search_username(username):
                     continue
 
                 detected = detect_platform(link, title)
+                exact_match = is_exact_username_match(link, username)
 
-                if not detected and not is_probably_profile(link):
+                # main filter
+                if not exact_match and not (detected and is_probably_profile(link)):
                     continue
+
+                # extra strict filter for X / Twitter
+                if "x.com" in link or "twitter.com" in link:
+                    if not exact_match:
+                        continue
 
                 seen_links.add(link)
 
@@ -242,7 +254,8 @@ def search_username(username):
                     "title": title,
                     "link": link,
                     "categories": list(detected),
-                    "score": score
+                    "score": score,
+                    "exact_match": exact_match
                 })
 
     print("\n[+] Summary:\n")
