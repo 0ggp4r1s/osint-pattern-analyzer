@@ -1,6 +1,15 @@
-from ddgs import DDGS
 import json
 import argparse
+import requests
+from bs4 import BeautifulSoup
+
+# search engines fallback
+try:
+    from ddgs import DDGS
+    ENGINE = "ddgs"
+except:
+    from duckduckgo_search import DDGS
+    ENGINE = "duckduckgo"
 
 
 PLATFORMS = {
@@ -58,6 +67,7 @@ def detect_platform(link, title):
 def is_noise(link):
     link = link.lower()
 
+    # allow facebook
     if "facebook.com" in link:
         return False
 
@@ -97,7 +107,7 @@ def score_result(title, link):
         score += 2
 
     if "facebook" in t or "facebook.com" in link:
-        score += 2
+        score += 3 
 
     if "twitter" in t or "x.com" in link:
         score += 2
@@ -111,6 +121,36 @@ def score_result(title, link):
     return score
 
 
+# -------------------------
+# GOOGLE fallback
+# -------------------------
+def google_search(query):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    url = f"https://www.google.com/search?q={query}"
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+    except:
+        return []
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    results = []
+
+    for a in soup.find_all("a"):
+        href = a.get("href")
+
+        if href and "/url?q=" in href:
+            link = href.split("/url?q=")[1].split("&")[0]
+
+            results.append({
+                "href": link,
+                "title": link
+            })
+
+    return results
+
+
 def search_username(username):
 
     queries = [
@@ -121,16 +161,15 @@ def search_username(username):
 
         f'"{username}" instagram',
 
-        # twitter / x improved
         f'"{username}" twitter',
         f'"{username}" x.com',
         f'"{username}" site:twitter.com',
         f'"{username}" site:x.com',
 
-        # facebook improved
+        # enhance facebook 
         f'"{username}" facebook',
-        f'"{username}" "facebook"',
-        f'"{username}" "fb"',
+        f'"{username}" site:facebook.com',
+        f'"{username}" site:m.facebook.com',
 
         f'"{username}" onlyfans',
         f'"{username}" escort',
@@ -150,6 +189,7 @@ def search_username(username):
 
     platform_hits = {k: False for k in PLATFORMS.keys()}
 
+    print(f"\n[+] Engine in use: {ENGINE}")
     print("\n[+] Starting username OSINT search...\n")
 
     with DDGS() as ddgs:
@@ -157,16 +197,20 @@ def search_username(username):
             print(f"[+] Searching: {query}")
 
             try:
-                results = ddgs.text(query, max_results=20)
-            except Exception:
-                print(f"[!] Query error: {query}")
-                continue
+                results = ddgs.text(query, max_results=10)
+            except:
+                results = []
+
+            # fallback to google
+            if not results:
+                print(f"[!] Google fallback: {query}")
+                results = google_search(query)
 
             for r in results:
                 link = r.get("href")
-                title = r.get("title")
+                title = r.get("title") or ""
 
-                if not link or not title:
+                if not link:
                     continue
 
                 if link in seen_links:
