@@ -3,7 +3,7 @@ import argparse
 import requests
 from bs4 import BeautifulSoup
 
-# search engines fallback
+# search engine fallback
 try:
     from ddgs import DDGS
     ENGINE = "ddgs"
@@ -12,27 +12,49 @@ except:
     ENGINE = "duckduckgo"
 
 
+# platform classification
 PLATFORMS = {
     "telegram": ["t.me", "telegram"],
-    "social": ["instagram.com", "twitter.com", "x.com", "facebook.com"],
-    "dating": ["tinder", "badoo", "bumble", "hinge", "meetic",
-               "okcupid", "happn", "lovoo", "adoptauntio", "grindr"],
-    "sugar": ["seeking", "mysugardaddy", "secretbenefits",
-              "sugardaddymeet", "sudy", "sugardaddy.com", "glambu"],
-    "adult_creator": ["onlyfans", "fansly", "fanvue", "mym", "loyalfans",
-                      "fancentro", "justforfans", "manyvids",
-                      "patreon", "exclu", "unlockd", "avnstars", "my.club"],
-    "escort_sites": ["loquosex.com", "destacamos.com", "publicontactos.com",
-                     "choosescorts.com", "slumi.com", "nuevapasion.com",
-                     "skokka.com", "milpasiones.com", "mileroticos.com",
-                     "oklute.com", "mundosexanuncio.com", "milescorts.com",
-                     "eurogirlsescort.com", "sexjobs.es", "publihot.com",
-                     "pasion.com", "putas69", "happyescorts"],
-    "forums": ["forocoches", "spalumi", "reddit"]
+
+    "social": [
+        "instagram.com",
+        "twitter.com", "x.com",
+        "facebook.com"
+    ],
+
+    "dating": [
+        "tinder", "badoo", "bumble", "hinge", "meetic",
+        "okcupid", "happn", "lovoo", "adoptauntio", "grindr"
+    ],
+
+    "sugar": [
+        "seeking", "mysugardaddy", "secretbenefits",
+        "sugardaddymeet", "sudy", "sugardaddy.com", "glambu"
+    ],
+
+    "adult_creator": [
+        "onlyfans", "fansly", "fanvue", "mym", "loyalfans",
+        "fancentro", "justforfans", "manyvids",
+        "patreon", "exclu", "unlockd", "avnstars", "my.club"
+    ],
+
+    "escort_sites": [
+        "loquosex.com", "destacamos.com", "publicontactos.com",
+        "choosescorts.com", "slumi.com", "nuevapasion.com",
+        "skokka.com", "milpasiones.com", "mileroticos.com",
+        "oklute.com", "mundosexanuncio.com", "milescorts.com",
+        "eurogirlsescort.com", "sexjobs.es", "publihot.com",
+        "pasion.com", "putas69", "happyescorts"
+    ],
+
+    "forums": [
+        "forocoches", "spalumi", "reddit"
+    ]
 }
 
 
 def detect_platform(link, title):
+    # detect platform based on link + title context
     text = (link + " " + title).lower()
     detected = set()
 
@@ -45,6 +67,7 @@ def detect_platform(link, title):
 
 
 def is_noise(link):
+    # remove obvious listing/category pages but allow facebook
     link = link.lower()
 
     if "facebook.com" in link:
@@ -61,10 +84,12 @@ def is_noise(link):
 
 
 def is_exact_username_match(link, username):
+    # strict match in URL
     return f"/{username.lower()}" in link.lower()
 
 
 def score_result(title, link):
+    # soft scoring, only used for ordering results
     score = 0
     t = title.lower()
 
@@ -87,6 +112,7 @@ def score_result(title, link):
 
 
 def google_search(query):
+    # basic google scraping fallback when DDG returns nothing
     headers = {"User-Agent": "Mozilla/5.0"}
     url = f"https://www.google.com/search?q={query}"
 
@@ -115,18 +141,31 @@ def google_search(query):
 
 def search_username(username):
 
+    # expanded queries
     queries = list(set([
         f'"{username}"',
+
         f'"{username}" telegram',
         f'"{username}" site:t.me',
+
         f'"{username}" instagram',
+
         f'"{username}" twitter',
         f'"{username}" x.com',
+        f'"{username}" site:twitter.com',
+        f'"{username}" site:x.com',
+
+        # facebook boosted queries
         f'"{username}" facebook',
-        f'"{username}" site:facebook.com',
+        f'"{username}" "facebook"',
+        f'"{username}" "fb"',
+        f'site:facebook.com "{username}"',
+        f'site:m.facebook.com "{username}"',
+
         f'"{username}" escort',
         f'"{username}" contactos',
         f'"{username}" masajes',
+
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
         f'"{username}" site:skokka.com'
@@ -134,6 +173,7 @@ def search_username(username):
 
     seen_links = set()
     all_results = []
+
     platform_hits = {k: False for k in PLATFORMS.keys()}
 
     print(f"\n[+] Engine in use: {ENGINE}")
@@ -148,6 +188,7 @@ def search_username(username):
             except:
                 results = []
 
+            # fallback to google if no results
             if not results:
                 print(f"[!] Google fallback: {query}")
                 results = google_search(query)
@@ -171,20 +212,38 @@ def search_username(username):
                 detected = detect_platform(link, title)
                 exact_match = is_exact_username_match(link, username)
 
+                # --- FACEBOOK FIX ---
+                # facebook is poorly indexed, so dont filter it aggressively
+                if "facebook.com" in link:
+                    seen_links.add(link)
+                    platform_hits["social"] = True
 
-                # 1. rrss trust the domain
+                    score = score_result(title, link)
+
+                    print(f"[+] {title}")
+                    print(link, "\n")
+
+                    all_results.append({
+                        "query": query,
+                        "title": title,
+                        "link": link,
+                        "categories": ["social"],
+                        "score": score,
+                        "exact_match": exact_match
+                    })
+                    continue
+
+                # --- MAIN FILTER LOGIC ---
+
                 if "social" in detected:
                     pass
 
-                # 2. escort trust the domain + context
                 elif "escort_sites" in detected:
                     pass
 
-                # 3. useful forums
                 elif "forums" in detected:
                     pass
 
-                # 4. exact match 
                 elif exact_match:
                     pass
 
