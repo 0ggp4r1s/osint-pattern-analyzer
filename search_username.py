@@ -14,41 +14,21 @@ except:
 
 PLATFORMS = {
     "telegram": ["t.me", "telegram"],
-
-    "social": [
-        "instagram.com",
-        "twitter.com", "x.com",
-        "facebook.com"
-    ],
-
-    "dating": [
-        "tinder", "badoo", "bumble", "hinge", "meetic",
-        "okcupid", "happn", "lovoo", "adoptauntio", "grindr"
-    ],
-
-    "sugar": [
-        "seeking", "mysugardaddy", "secretbenefits",
-        "sugardaddymeet", "sudy", "sugardaddy.com", "glambu"
-    ],
-
-    "adult_creator": [
-        "onlyfans", "fansly", "fanvue", "mym", "loyalfans",
-        "fancentro", "justforfans", "manyvids",
-        "patreon", "exclu", "unlockd", "avnstars", "my.club"
-    ],
-
-    "escort_sites": [
-        "loquosex.com", "destacamos.com", "publicontactos.com",
-        "choosescorts.com", "slumi.com", "nuevapasion.com",
-        "skokka.com", "milpasiones.com", "mileroticos.com",
-        "oklute.com", "mundosexanuncio.com", "milescorts.com",
-        "eurogirlsescort.com", "sexjobs.es", "publihot.com",
-        "pasion.com", "putas69", "happyescorts"
-    ],
-
-    "forums": [
-        "forocoches", "spalumi", "reddit"
-    ]
+    "social": ["instagram.com", "twitter.com", "x.com", "facebook.com"],
+    "dating": ["tinder", "badoo", "bumble", "hinge", "meetic",
+               "okcupid", "happn", "lovoo", "adoptauntio", "grindr"],
+    "sugar": ["seeking", "mysugardaddy", "secretbenefits",
+              "sugardaddymeet", "sudy", "sugardaddy.com", "glambu"],
+    "adult_creator": ["onlyfans", "fansly", "fanvue", "mym", "loyalfans",
+                      "fancentro", "justforfans", "manyvids",
+                      "patreon", "exclu", "unlockd", "avnstars", "my.club"],
+    "escort_sites": ["loquosex.com", "destacamos.com", "publicontactos.com",
+                     "choosescorts.com", "slumi.com", "nuevapasion.com",
+                     "skokka.com", "milpasiones.com", "mileroticos.com",
+                     "oklute.com", "mundosexanuncio.com", "milescorts.com",
+                     "eurogirlsescort.com", "sexjobs.es", "publihot.com",
+                     "pasion.com", "putas69", "happyescorts"],
+    "forums": ["forocoches", "spalumi", "reddit"]
 }
 
 
@@ -73,7 +53,7 @@ def is_noise(link):
     noise_patterns = [
         "categoria", "tag", "listado",
         "page=", "buscar", "search",
-        "/escorts/", "/category/", "/tags/",
+        "/category/", "/tags/",
         "/page/", "?p="
     ]
 
@@ -94,17 +74,14 @@ def score_result(title, link):
     if "escort" in t or "contactos" in t:
         score += 2
 
-    if "facebook" in t or "facebook.com" in link:
+    if "facebook.com" in link:
         score += 3
 
-    if "twitter" in t or "x.com" in link:
+    if "x.com" in link or "twitter.com" in link:
         score += 2
 
     if "t.me" in link:
         score += 3
-
-    if ".html" in link:
-        score += 1
 
     return score
 
@@ -145,24 +122,18 @@ def search_username(username):
         f'"{username}" instagram',
         f'"{username}" twitter',
         f'"{username}" x.com',
-        f'"{username}" site:twitter.com',
-        f'"{username}" site:x.com',
         f'"{username}" facebook',
         f'"{username}" site:facebook.com',
-        f'"{username}" site:m.facebook.com',
-        f'"{username}" onlyfans',
         f'"{username}" escort',
         f'"{username}" contactos',
         f'"{username}" masajes',
         f'"{username}" site:mileroticos.com',
         f'"{username}" site:slumi.com',
-        f'"{username}" site:skokka.com',
-        f'"{username}" site:loquosex.com'
+        f'"{username}" site:skokka.com'
     ]))
 
     seen_links = set()
     all_results = []
-
     platform_hits = {k: False for k in PLATFORMS.keys()}
 
     print(f"\n[+] Engine in use: {ENGINE}")
@@ -200,31 +171,25 @@ def search_username(username):
                 detected = detect_platform(link, title)
                 exact_match = is_exact_username_match(link, username)
 
-                text = (link + title).lower()
 
-                # --- NEW LOGIC ---
-
-                if exact_match:
+                # 1. rrss trust the domain
+                if "social" in detected:
                     pass
 
-                elif "social" in detected:
-                    if username.lower() not in text:
-                        continue
-
+                # 2. escort trust the domain + context
                 elif "escort_sites" in detected:
-                    if username.lower() not in text:
-                        continue
+                    pass
 
+                # 3. useful forums
                 elif "forums" in detected:
+                    pass
+
+                # 4. exact match 
+                elif exact_match:
                     pass
 
                 else:
                     continue
-
-                # twitter strict
-                if "x.com" in link or "twitter.com" in link:
-                    if not exact_match:
-                        continue
 
                 seen_links.add(link)
 
@@ -248,21 +213,18 @@ def search_username(username):
     print("\n[+] Summary:\n")
 
     for p, v in platform_hits.items():
-        status = "✔" if v else "✘"
-        print(f"{p}: {status}")
+        print(f"{p}: {'✔' if v else '✘'}")
 
     all_results = sorted(all_results, key=lambda x: x["score"], reverse=True)
 
-    output = {
-        "username": username,
-        "platforms_detected": platform_hits,
-        "results": all_results
-    }
-
     with open(f"username_{username}.json", "w") as f:
-        json.dump(output, f, indent=4)
+        json.dump({
+            "username": username,
+            "platforms_detected": platform_hits,
+            "results": all_results
+        }, f, indent=4)
 
-    return output
+    return all_results
 
 
 if __name__ == "__main__":
