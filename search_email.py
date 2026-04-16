@@ -34,7 +34,8 @@ PLATFORMS = {
         "eurogirlsescort.com", "sexjobs.es", "publihot.com",
         "pasion.com", "putas69", "happyescorts",
         "nuevoloquo", "citaspasion", "erosguia", "agenda69",
-        "madrid69", "red-life", "goputas"
+        "madrid69", "red-life", "goputas",
+        "erosmundo.es"
     ],
 
     "forums": [
@@ -56,7 +57,6 @@ def detect_platform(link, title):
 
 
 def contains_email(text, email):
-    # only keep results where email appears literally
     return email.lower() in text.lower()
 
 
@@ -74,7 +74,6 @@ def is_noise(link):
 
 
 def score_result(title, link):
-    # scoring only for ordering, not filtering
     score = 0
     t = title.lower()
 
@@ -82,6 +81,9 @@ def score_result(title, link):
         score += 2
 
     if "masajes" in t:
+        score += 2
+
+    if "facebook.com" in link:
         score += 2
 
     if any(x in link for x in [".html", "details"]):
@@ -128,19 +130,17 @@ def search_email(email):
         f'"{email}" escort',
         f'"{email}" masajes',
 
-        # escort sites
         f'"{email}" site:loquosex.com',
         f'"{email}" site:destacamos.com',
         f'"{email}" site:mileroticos.com',
         f'"{email}" site:skokka.com',
         f'"{email}" site:slumi.com',
         f'"{email}" site:pasion.com',
+        f'"{email}" site:erosmundo.es',
 
-        # forums
         f'"{email}" site:spalumi.com',
         f'"{email}" foro',
 
-        # socials 
         f'"{email}" instagram',
         f'"{email}" facebook',
         f'"{email}" twitter',
@@ -182,13 +182,29 @@ def search_email(email):
                 if is_noise(link):
                     continue
 
-                text = (link + " " + title)
-
-                # Hard filter
-                if not contains_email(text, email):
-                    continue
+                text = (link + " " + title).lower()
 
                 detected = detect_platform(link, title)
+
+                # hybrid filter 
+
+                # exact email 
+                if contains_email(text, email):
+                    pass
+
+                # facebook trust domain
+                elif "facebook.com" in link:
+                    pass
+
+                # allow if context makes sense
+                elif detected:
+                    if any(k in text for k in ["masajes", "escort", "contacto", "video"]):
+                        pass
+                    else:
+                        continue
+
+                else:
+                    continue
 
                 seen_links.add(link)
 
