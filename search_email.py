@@ -3,7 +3,6 @@ import argparse
 import requests
 from bs4 import BeautifulSoup
 
-# search engine fallback
 try:
     from ddgs import DDGS
     ENGINE = "ddgs"
@@ -16,10 +15,10 @@ PLATFORMS = {
     "telegram": ["t.me", "telegram"],
 
     "social": [
-        "instagram.com",
-        "twitter.com", "x.com",
-        "facebook.com"
-    ],
+    "instagram.com",
+    "twitter.com", "x.com",
+    "facebook.com"
+],
 
     "dating": [
         "tinder", "badoo", "bumble", "hinge", "meetic",
@@ -73,6 +72,29 @@ def is_noise(link):
     return any(n in link for n in noise_patterns)
 
 
+# detect real facebook profile
+def is_valid_facebook(link):
+    link = link.lower()
+
+    if "facebook.com" not in link:
+        return False
+
+    # avoid junk
+    bad_patterns = [
+        "/posts/", "/photo", "/media", "/groups/",
+        "/events/", "/hashtag", "permalink.php"
+    ]
+
+    if any(p in link for p in bad_patterns):
+        return False
+
+    # basic profile patterns
+    return any(p in link for p in [
+        "facebook.com/",
+        "m.facebook.com/"
+    ])
+
+
 def score_result(title, link):
     score = 0
     t = title.lower()
@@ -84,7 +106,7 @@ def score_result(title, link):
         score += 2
 
     if "facebook.com" in link:
-        score += 2
+        score += 3
 
     if any(x in link for x in [".html", "details"]):
         score += 1
@@ -92,7 +114,6 @@ def score_result(title, link):
     return score
 
 
-# google fallback
 def google_search(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     url = f"https://www.google.com/search?q={query}"
@@ -109,13 +130,13 @@ def google_search(query):
     for a in soup.find_all("a"):
         href = a.get("href")
 
-        if href and "/url?q=" in href:
-            link = href.split("/url?q=")[1].split("&")[0]
+    if href and "/url?q=" in href:
+        link = href.split("/url?q=")[1].split("&")[0]
 
-            results.append({
-                "href": link,
-                "title": link
-            })
+        results.append({
+            "href": link,
+            "title": link
+        })
 
     return results
 
@@ -130,20 +151,21 @@ def search_email(email):
         f'"{email}" escort',
         f'"{email}" masajes',
 
-        f'"{email}" site:loquosex.com',
-        f'"{email}" site:destacamos.com',
+        # escort
         f'"{email}" site:mileroticos.com',
         f'"{email}" site:skokka.com',
-        f'"{email}" site:slumi.com',
-        f'"{email}" site:pasion.com',
+        f'"{email}" site:destacamos.com',
         f'"{email}" site:erosmundo.es',
 
-        f'"{email}" site:spalumi.com',
-        f'"{email}" foro',
+        # improved facebook queries
+        f'"{email}" site:facebook.com',
+        f'"{email}" site:m.facebook.com',
+        f'"{email}" facebook contacto',
+        f'"{email}" facebook perfil',
 
-        f'"{email}" instagram',
-        f'"{email}" facebook',
-        f'"{email}" twitter',
+        # forums
+        f'"{email}" site:spalumi.com',
+        f'"{email}" foro'
     ]))
 
     seen_links = set()
@@ -183,22 +205,16 @@ def search_email(email):
                     continue
 
                 text = (link + " " + title).lower()
-
                 detected = detect_platform(link, title)
 
-                # hybrid filter 
-
-                # exact email 
                 if contains_email(text, email):
                     pass
 
-                # facebook trust domain
-                elif "facebook.com" in link:
-                    pass
+                elif is_valid_facebook(link):
+                    detected.add("social")
 
-                # allow if context makes sense
                 elif detected:
-                    if any(k in text for k in ["masajes", "escort", "contacto", "video"]):
+                    if any(k in text for k in ["masajes", "escort", "contacto"]):
                         pass
                     else:
                         continue
