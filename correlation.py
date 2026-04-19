@@ -1,8 +1,8 @@
 import json
-import glob
 import argparse
-from collections import defaultdict
-from urllib.parse import urlparse
+import glob
+import os
+
 
 def load_json_files(path):
     files = glob.glob(path)
@@ -11,105 +11,110 @@ def load_json_files(path):
     for f in files:
         try:
             with open(f, "r") as file:
-                data.append(json.load(file))
+                content = json.load(file)
+
+                if "results" in content:
+                    data.append({
+                        "file": os.path.basename(f),
+                        "data": content
+                    })
         except:
             continue
 
     return data
 
 
-def correlate(url):
-    try:
-        return urlparse(url).netloc
-    except:
-        return ""
+def extract_links(results):
+    links = set()
+
+    for r in results:
+        link = r.get("link")
+        if link:
+            links.add(link)
+
+    return links
+
+
+def extract_domains(links):
+    domains = set()
+
+    for link in links:
+        try:
+            domain = link.split("/")[2]
+            domains.add(domain)
+        except:
+            continue
+
+    return domains
+
 
 def correlate(data):
-    all_links = defaultdict(list)
-    platform_summary = defaultdict(int)
+    correlations = []
 
-    for dataset in data:
-        source = list(dataset.keys())[0]
+    for i in range(len(data)):
+        for j in range(i + 1, len(data)):
 
-        for result in dataset.get("results", []):
-            link = result.get("link")
-            categories = result.get("categories",[])
+            file1 = data[i]
+            file2 = data[j]
 
-            if not link:
-                continue
+            links1 = extract_links(file1["data"]["results"])
+            links2 = extract_links(file2["data"]["results"])
 
-            domain = extract_domain(link)
+            domains1 = extract_domains(links1)
+            domains2 = extract_domains(links2)
 
-            all_links[domain].append({
-                "link": link,
-                "source": source,
-                "categories": categories
-            })
+            common_links = links1.intersection(links2)
+            common_domains = domains1.intersection(domains2)
 
-            for c in categories:
-                platform_summary[c] +=1
+            if common_links or common_domains:
+                correlations.append({
+                    "file_1": file1["file"],
+                    "file_2": file2["file"],
+                    "common_links": list(common_links),
+                    "common_domains": list(common_domains)
+                })
 
-    # detect overlaps
-    overlaps = {}
-
-    for domain, entries in all_links.items():
-        if len(entries) > 1:
-            overlaps[domain] = entries
-
-    return {
-        "total_sources": len(data),
-        "domains_found": len(all_links),
-        "platform_summary": dict(platform_summary),
-        "overlaps": overlaps
-    }
+    return correlations
 
 
-def print_summary(result):
-    print("\n[+] Correlation summary\n")
+def main(path):
+    data = load_json_files(path)
 
-    print(f"Sources loades: {result['total_sources']}")
-    print(f"Unique domains: {result['domains_found']}\n")
-
-    print("[+] Platform frecuency:")
-    for k, v in result ["platform_summary"].items():
-        print(f"  - {k}: {v}")
-
-    print("\n[+] Overlaps detected:\n")
-
-    if not result["overlaps"]:
-        print("No overlaps found")
+    if not data:
+        print("[-] No valid JSON files found")
         return
 
-    for domain, entries in result["overlaps"].items():
-        print(f"\n--- {domain} ---")
-        for e in entries:
-            print(f"{e['link']} ({e['categories']})")
+    correlations = correlate(data)
+
+    if not correlations:
+        print("[-] No correlations found")
+        return
+
+    print("\n[+] Correlations found:\n")
+
+    for c in correlations:
+        print(f"{c['file_1']}  <-->  {c['file_2']}")
+
+        if c["common_links"]:
+            print("  [links]")
+            for l in c["common_links"]:
+                print(f"   - {l}")
+
+        if c["common_domains"]:
+            print("  [domains]")
+            for d in c["common_domains"]:
+                print(f"   - {d}")
+
+        print()
 
 
-
-def main():
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", help="Path to JSON files (e.g data/*.json)")
+    parser.add_argument("--path", help="Path to JSON files (e.g. data/*.json)")
 
     args = parser.parse_args()
 
-    if not args.path:
-        print("[-] Provide path to JSON files")
-        return
-
-    data = load_json_files(args.path)
-
-    if not data:
-        print("[-] NO valid JSON files found")
-        return
-
-    result = correlation(data)
-
-    print_summary(result)
-
-    with open("correlation_output.json", "w") as f:
-        json.dump(result, f, indent=4)
-
-if __name__ == "__main__":
-    main()
+    if args.path:
+        main(args.path)
+    else:
+        print("[-] Provide a path like data/*.json")
